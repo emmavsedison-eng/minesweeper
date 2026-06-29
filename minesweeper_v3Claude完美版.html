@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Minesweeper</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #008080;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            box-sizing: border-box;
+        }
+
+        /* 缩放核心外包裹层 */
+        .zoom-wrapper {
+            transform-origin: center center;
+            transition: transform 0.1s ease-out;
+            display: inline-block;
+        }
+
+        .window {
+            background-color: #c0c0c0;
+            border-top: 2px solid #ffffff; border-left: 2px solid #ffffff;
+            border-right: 2px solid #0a0a0a; border-bottom: 2px solid #0a0a0a;
+            box-shadow: 1px 1px 10px rgba(0,0,0,0.4);
+            display: inline-block;
+            padding: 3px;
+            user-select: none;
+            position: relative;
+        }
+
+        .title-bar {
+            background: linear-gradient(90deg, #000080, #1084d0);
+            color: white;
+            padding: 3px 5px 3px 3px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        .title-text { display: flex; align-items: center; gap: 4px; }
+        .title-icon {
+            width: 14px; height: 14px;
+            background: radial-gradient(circle, #333 40%, transparent 45%);
+            position: relative;
+        }
+        .title-icon::before { content: ''; position: absolute; top: 6px; left: 2px; width: 10px; height: 2px; background: #333; }
+        .title-icon::after { content: ''; position: absolute; top: 2px; left: 6px; width: 2px; height: 10px; background: #333; }
+        
+        .window-buttons { display: flex; gap: 2px; }
+        .win-btn {
+            background-color: #c0c0c0;
+            border-top: 1px solid #fff; border-left: 1px solid #fff;
+            border-right: 1px solid #000; border-bottom: 1px solid #000;
+            width: 16px; height: 14px; font-size: 9px; color: black;
+            display: flex; justify-content: center; align-items: center; font-weight: bold;
+        }
+
+        .menu-bar {
+            font-size: 12px;
+            padding: 2px 6px;
+            display: flex;
+            gap: 5px;
+            background-color: #c0c0c0;
+            position: relative;
+        }
+        .menu-item { padding: 2px 6px; cursor: pointer; }
+        .menu-item:hover { background-color: #000080; color: white; }
+
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%; left: 5px;
+            background-color: #c0c0c0;
+            border-top: 1px solid #fff; border-left: 1px solid #fff;
+            border-right: 2px solid #000; border-bottom: 2px solid #000;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+            z-index: 100;
+            min-width: 140px;
+            padding: 2px;
+        }
+        
+        /* 二级嵌套菜单容器样式 */
+        .submenu-container {
+            position: relative;
+        }
+        .submenu {
+            display: none;
+            position: absolute;
+            top: -3px; left: 100%;
+            background-color: #c0c0c0;
+            border-top: 1px solid #fff; border-left: 1px solid #fff;
+            border-right: 2px solid #000; border-bottom: 2px solid #000;
+            padding: 2px;
+            min-width: 100px;
+        }
+        .submenu-container:hover .submenu { display: block; }
+
+        .dropdown-item {
+            padding: 3px 20px 3px 22px;
+            font-size: 12px;
+            color: black;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+        }
+        .dropdown-item:hover { background-color: #000080; color: white; }
+        .dropdown-divider { height: 1px; background-color: #808080; border-bottom: 1px solid #fff; margin: 4px 1px; }
+        
+        .dropdown-item.checked::before {
+            content: "•"; position: absolute; left: 8px; font-size: 16px; top: 0px;
+        }
+
+        .game-border-outer {
+            border-top: 3px solid #808080; border-left: 3px solid #808080;
+            border-right: 3px solid #ffffff; border-bottom: 3px solid #ffffff;
+            padding: 6px;
+            background-color: #c0c0c0;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 7px;
+            margin-bottom: 6px;
+            border-top: 3px solid #808080; border-left: 3px solid #808080;
+            border-right: 3px solid #ffffff; border-bottom: 3px solid #ffffff;
+        }
+
+        .digital-display {
+            background-color: black;
+            padding: 1px 3px;
+            border-top: 1px solid #808080; border-left: 1px solid #808080;
+            border-right: 1px solid #fff; border-bottom: 1px solid #fff;
+            line-height: 0;
+            display: flex; align-items: center;
+        }
+
+        #reset-btn {
+            cursor: pointer;
+            width: 26px; height: 26px;
+            display: flex; justify-content: center; align-items: center;
+            background-color: #c0c0c0;
+            border-top: 2px solid #ffffff; border-left: 2px solid #ffffff;
+            border-right: 2px solid #808080; border-bottom: 2px solid #808080;
+            padding: 0; box-sizing: content-box;
+        }
+        #reset-btn:active { border-top: 2px solid #808080; border-left: 2px solid #808080; border-right: 2px solid #fff; border-bottom: 2px solid #fff; }
+        #reset-btn canvas { display: block; }
+
+        #board {
+            display: grid;
+            border-top: 3px solid #808080; border-left: 3px solid #808080;
+            border-right: 3px solid #ffffff; border-bottom: 3px solid #ffffff;
+            background-color: #808080;
+        }
+
+        .cell {
+            width: 16px; height: 16px;
+            background-color: #c0c0c0;
+            border-top: 2px solid #ffffff; border-left: 2px solid #ffffff;
+            border-right: 2px solid #808080; border-bottom: 2px solid #808080;
+            display: flex; justify-content: center; align-items: center;
+            font-family: "MS Sans Serif", "Courier New", monospace;
+            font-size: 12px; font-weight: 1000;
+            box-sizing: border-box;
+        }
+        .cell.active-press, .cell.revealed {
+            border: 1px solid #808080 !important;
+            padding: 1px 0 0 1px;
+            background-color: #c0c0c0;
+        }
+        .cell.mine-hit { background-color: red !important; border: 1px solid #808080 !important;}
+
+        .mine-design {
+            width: 10px; height: 10px;
+            background: radial-gradient(circle at 3px 3px, #555, #000 70%);
+            border-radius: 50%; position: relative;
+        }
+        .mine-design::before { content: ''; position: absolute; top: -2px; left: 4px; width: 2px; height: 14px; background: #000; }
+        .mine-design::after { content: ''; position: absolute; top: 4px; left: -2px; width: 14px; height: 2px; background: #000; }
+        .mine-cross { position: absolute; width: 10px; height: 10px; }
+        .mine-cross::before { content: ''; position: absolute; top: 1px; left: 1px; width: 8px; height: 8px; border-left: 2px solid #000; border-top: 2px solid #000; transform: rotate(45deg); }
+        .mine-design .spark { position: absolute; width: 2px; height: 2px; background: #ffaa00; top: -3px; right: -1px; border-radius: 50%; }
+
+        .flag-design { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; position: relative; }
+        .flag-pole { width: 1px; height: 10px; background-color: black; position: absolute; left: 8px; top: 3px; }
+        .flag-cloth { width: 0; height: 0; border-top: 3px solid transparent; border-bottom: 3px solid transparent; border-right: 5px solid red; position: absolute; left: 3px; top: 3px; }
+        .flag-base { width: 5px; height: 1px; background-color: black; position: absolute; left: 6px; top: 12px; }
+        .flag-base2 { width: 7px; height: 1px; background-color: black; position: absolute; left: 5px; top: 13px; }
+        .wrong-cross { position: absolute; color: red; font-size: 14px; font-weight: bold; line-height: 16px; z-index: 10; }
+
+        .modal {
+            display: none;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #c0c0c0;
+            border-top: 2px solid #fff; border-left: 2px solid #fff;
+            border-right: 2px solid #000; border-bottom: 2px solid #000;
+            box-shadow: 3px 3px 15px rgba(0,0,0,0.5);
+            z-index: 200;
+            padding: 15px;
+            width: 240px;
+        }
+        .modal-title { font-weight: bold; font-size: 13px; margin-bottom: 12px; text-align: center;}
+        .modal-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 8px; }
+        .modal-btn {
+            display: block; margin: 15px auto 0 auto;
+            padding: 2px 15px; background-color: #c0c0c0;
+            border-top: 1px solid #fff; border-left: 1px solid #fff;
+            border-right: 1px solid #000; border-bottom: 1px solid #000;
+            font-size: 12px; cursor: pointer; text-align: center; width: 50px;
+        }
+        .modal-btn:active { border: 1px solid #808080; padding: 3px 15px 1px 15px; }
+
+        .c1 { color: #0000ff; } .c2 { color: #008000; } .c3 { color: #ff0000; } .c4 { color: #000080; }
+        .c5 { color: #800000; } .c6 { color: #008080; } .c7 { color: #000000; } .c8 { color: #808080; }
+    </style>
+</head>
+<body>
+
+<div class="zoom-wrapper" id="zoom-container">
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-text"><div class="title-icon"></div>Minesweeper</div>
+            <div class="window-buttons">
+                <div class="win-btn">_</div>
+                <div class="win-btn">❑</div>
+                <div class="win-btn">X</div>
+            </div>
+        </div>
+        
+        <div class="menu-bar">
+            <div class="menu-item" id="menu-game-btn">游戏(<u>G</u>)</div>
+            <div class="menu-item" id="menu-help-btn">帮助(<u>H</u>)</div>
+            
+            <div class="dropdown-menu" id="game-dropdown">
+                <div class="dropdown-item" data-diff="restart">开局(<u>N</u>) <span style="font-size:10px;">F2</span></div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-item" id="opt-beginner" data-diff="beginner">初级(<u>B</u>)</div>
+                <div class="dropdown-item" id="opt-intermediate" data-diff="intermediate">中级(<u>I</u>)</div>
+                <div class="dropdown-item" id="opt-expert" data-diff="expert">高级(<u>E</u>)</div>
+                <div class="dropdown-divider"></div>
+                
+                <div class="submenu-container">
+                    <div class="dropdown-item">缩放(<u>Z</u>) <span style="font-size:10px;">►</span></div>
+                    <div class="submenu">
+                        <div class="dropdown-item zoom-opt" data-zoom="1">100%</div>
+                        <div class="dropdown-item zoom-opt" data-zoom="1.25">125%</div>
+                        <div class="dropdown-item zoom-opt" data-zoom="1.5">150%</div>
+                        <div class="dropdown-item zoom-opt" data-zoom="1.75">175%</div>
+                        <div class="dropdown-item zoom-opt" data-zoom="2">200%</div>
+                    </div>
+                </div>
+                
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-item" id="menu-leaderboard-btn">英雄榜(<u>T</u>)...</div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-item" id="menu-bg-btn">自定义背景(<u>W</u>)...</div>
+                <div class="dropdown-item" id="menu-bg-reset-btn">恢复默认背景</div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-item" onclick="window.close()">退出(<u>X</u>)</div>
+            </div>
+        </div>
+        <input type="file" id="bg-upload" accept="image/*" style="display:none;">
+
+        <div class="game-border-outer">
+            <div class="header">
+                <div class="digital-display"><canvas id="mine-count" width="39" height="23"></canvas></div>
+                <div id="reset-btn"><canvas id="face-canvas" width="22" height="22"></canvas></div>
+                <div class="digital-display"><canvas id="timer" width="39" height="23"></canvas></div>
+            </div>
+            <div id="board"></div>
+        </div>
+
+        <div class="modal" id="leaderboard-modal">
+            <div class="modal-title">扫雷英雄榜</div>
+            <div class="modal-row"><b>级别</b><b>时间</b><b>名字</b></div>
+            <div class="dropdown-divider"></div>
+            <div class="modal-row"><span>初级:</span><span id="score-beginner-time">999 秒</span><span id="score-beginner-name">匿名</span></div>
+            <div class="modal-row"><span>中级:</span><span id="score-intermediate-time">999 秒</span><span id="score-intermediate-name">匿名</span></div>
+            <div class="modal-row"><span>高级:</span><span id="score-expert-time">999 秒</span><span id="score-expert-name">匿名</span></div>
+            <div class="modal-btn" id="close-leaderboard">确定</div>
+        </div>
+
+        <div class="modal" id="help-modal">
+            <div class="modal-title">关于 经典扫雷</div>
+            <div style="font-size: 12px; text-align: center; line-height: 1.5;">
+                绝对随机暴毙完全体<br>
+                完美集成重工业手感双击排雷<br>
+                内置游戏菜单无损多级缩放系统！
+            </div>
+            <div class="modal-btn" id="close-help">确定</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ═══════════════════════════════════════════
+    //  Canvas图标绘制系统
+    // ═══════════════════════════════════════════
+
+    // ── 七段数码管 ──
+    // 段顺序: [top, top-left, top-right, middle, bot-left, bot-right, bottom]
+    const SEG_MAP = {
+        '0':[1,1,1,0,1,1,1], '1':[0,0,1,0,0,1,0], '2':[1,0,1,1,1,0,1],
+        '3':[1,0,1,1,0,1,1], '4':[0,1,1,1,0,1,0], '5':[1,1,0,1,0,1,1],
+        '6':[1,1,0,1,1,1,1], '7':[1,0,1,0,0,1,0], '8':[1,1,1,1,1,1,1],
+        '9':[1,1,1,1,0,1,1], '-':[0,0,0,1,0,0,0], ' ':[0,0,0,0,0,0,0]
+    };
+
+    function drawLCDDigit(ctx, ch, x, y, dw, dh) {
+        const s = SEG_MAP[ch] || SEG_MAP[' '];
+        const ON = '#ff2200', OFF = '#3a0000';
+        const t = 2.2;   // 段宽
+        const g = 0.8;   // 间隙
+        const iw = dw - g*2, ih = dh - g*2;
+        const mx = x + g, my = y + g;
+        const mh = ih / 2;
+
+        function hBar(bx, by, on) {
+            ctx.fillStyle = on ? ON : OFF;
+            ctx.beginPath();
+            ctx.moveTo(bx+t, by);   ctx.lineTo(bx+iw-t, by);
+            ctx.lineTo(bx+iw-t+t*0.4, by+t*0.5);
+            ctx.lineTo(bx+iw-t, by+t); ctx.lineTo(bx+t, by+t);
+            ctx.lineTo(bx+t-t*0.4, by+t*0.5);
+            ctx.closePath(); ctx.fill();
+        }
+        function vBar(bx, by, bh, on) {
+            ctx.fillStyle = on ? ON : OFF;
+            ctx.beginPath();
+            ctx.moveTo(bx, by+t);       ctx.lineTo(bx+t*0.4, by+t-t*0.4);
+            ctx.lineTo(bx+t, by+t);     ctx.lineTo(bx+t, by+bh-t);
+            ctx.lineTo(bx+t*0.4, by+bh-t+t*0.4); ctx.lineTo(bx, by+bh-t);
+            ctx.closePath(); ctx.fill();
+        }
+
+        hBar(mx, my,             s[0]);          // top
+        vBar(mx, my, mh,         s[1]);          // top-left
+        vBar(mx+iw-t, my, mh,   s[2]);          // top-right
+        hBar(mx, my+mh-t/2,     s[3]);          // middle
+        vBar(mx, my+mh, mh,     s[4]);          // bot-left
+        vBar(mx+iw-t, my+mh, mh,s[5]);         // bot-right
+        hBar(mx, my+ih-t,       s[6]);          // bottom
+    }
+
+    function drawLCD(canvasId, value) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        let str;
+        if (typeof value === 'string') { str = value; }
+        else if (value < 0) { str = '-' + String(Math.abs(value)).padStart(2,'0'); }
+        else { str = String(Math.min(value,999)).padStart(3,'0'); }
+
+        const dw = Math.floor(canvas.width / 3);
+        const dh = canvas.height;
+        for (let i = 0; i < 3; i++) {
+            drawLCDDigit(ctx, str[i] ?? ' ', i*dw, 0, dw, dh);
+        }
+    }
+
+    // ── 笑脸按钮 ──
+    function drawFace(state) {
+        // state: 'normal' | 'pressed' | 'win' | 'dead'
+        const canvas = document.getElementById('face-canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width, h = canvas.height;
+        const cx = w/2, cy = h/2;
+        const r = Math.min(w,h)/2 - 1;
+
+        ctx.clearRect(0,0,w,h);
+
+        // 黄色圆脸
+        ctx.fillStyle = '#ffdd00';
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+
+        if (state === 'dead') {
+            // X 眼
+            function xEye(ex, ey) {
+                ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.moveTo(ex-2.5,ey-2.5); ctx.lineTo(ex+2.5,ey+2.5); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(ex+2.5,ey-2.5); ctx.lineTo(ex-2.5,ey+2.5); ctx.stroke();
+            }
+            xEye(cx-4, cy-3); xEye(cx+4, cy-3);
+            // 皱眉
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(cx, cy-7, 4, 0.1*Math.PI, 0.9*Math.PI, true);
+            ctx.stroke();
+            // 向下弯的嘴（输掉）
+            ctx.beginPath();
+            ctx.arc(cx, cy+7, 3.5, Math.PI*1.1, Math.PI*1.9, false);
+            ctx.stroke();
+
+        } else if (state === 'win') {
+            // 墨镜（两个矩形+横梁）
+            ctx.fillStyle = '#000';
+            ctx.fillRect(cx-7.5, cy-5, 5.5, 3.5);
+            ctx.fillRect(cx+2, cy-5, 5.5, 3.5);
+            ctx.fillRect(cx-2, cy-4.5, 4, 2.5);  // 横梁
+            ctx.fillRect(cx-9, cy-5, 2, 3.5);     // 左侧边
+            ctx.fillRect(cx+7, cy-5, 2, 3.5);     // 右侧边
+            // 大笑
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(cx, cy+2, 5, 0, Math.PI); ctx.stroke();
+
+        } else if (state === 'pressed') {
+            // 普通眼
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(cx-4, cy-3, 1.5, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx+4, cy-3, 1.5, 0, Math.PI*2); ctx.fill();
+            // O 形嘴（惊讶）
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(cx, cy+3, 2.5, 0, Math.PI*2); ctx.stroke();
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(cx, cy+3, 1.5, 0, Math.PI*2); ctx.fill();
+
+        } else {
+            // 普通眼
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(cx-4, cy-3, 1.5, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx+4, cy-3, 1.5, 0, Math.PI*2); ctx.fill();
+            // 微笑
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(cx, cy+1, 4.5, 0.05*Math.PI, 0.95*Math.PI); ctx.stroke();
+        }
+    }
+
+    // ── 地雷 ──
+    function drawMineOnCtx(ctx, x, y, size) {
+        const cx = x+size/2, cy = y+size/2;
+        const r = size * 0.28;
+        ctx.save();
+        // 8根触角
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = Math.max(1, size*0.08);
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 8; i++) {
+            const a = (i/8)*Math.PI*2 - Math.PI/8;
+            ctx.beginPath();
+            ctx.moveTo(cx+Math.cos(a)*r*0.9, cy+Math.sin(a)*r*0.9);
+            ctx.lineTo(cx+Math.cos(a)*r*1.75, cy+Math.sin(a)*r*1.75);
+            ctx.stroke();
+        }
+        // 主球
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+        // 高光
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(cx-r*0.28, cy-r*0.32, r*0.22, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+    }
+
+    // ── 旗子 ──
+    function drawFlagOnCtx(ctx, x, y, size) {
+        ctx.save();
+        const poleX = x + size*0.56;
+        const poleTop = y + size*0.1;
+        const poleBot = y + size*0.88;
+        // 旗杆
+        ctx.strokeStyle = '#000'; ctx.lineWidth = Math.max(1, size*0.09);
+        ctx.lineCap = 'square';
+        ctx.beginPath(); ctx.moveTo(poleX, poleTop); ctx.lineTo(poleX, poleBot); ctx.stroke();
+        // 底座两横线
+        ctx.lineWidth = Math.max(1, size*0.09);
+        ctx.beginPath(); ctx.moveTo(x+size*0.2, poleBot); ctx.lineTo(x+size*0.8, poleBot); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x+size*0.15, poleBot+size*0.07); ctx.lineTo(x+size*0.85, poleBot+size*0.07); ctx.stroke();
+        // 红旗（三角形）
+        ctx.fillStyle = '#ff0000';
+        ctx.beginPath();
+        ctx.moveTo(poleX, poleTop);
+        ctx.lineTo(poleX - size*0.38, poleTop + size*0.2);
+        ctx.lineTo(poleX, poleTop + size*0.38);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+    }
+
+    // ── 单元格图标渲染 ──
+    function setCellCanvas(cell, type) {
+        cell.element.textContent = '';
+        const s = 12; // cell里的图标尺寸（cell是16px，留2px边距）
+        const cv = document.createElement('canvas');
+        cv.width = s; cv.height = s;
+        const ctx = cv.getContext('2d');
+
+        if (type === 'mine') {
+            drawMineOnCtx(ctx, 0, 0, s);
+        } else if (type === 'flag') {
+            drawFlagOnCtx(ctx, 0, 0, s);
+        } else if (type === 'wrong') {
+            // 地雷 + 红叉
+            drawMineOnCtx(ctx, 0, 0, s);
+            ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(1,1); ctx.lineTo(s-1,s-1); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(s-1,1); ctx.lineTo(1,s-1); ctx.stroke();
+        }
+        cell.element.appendChild(cv);
+    }
+
+    // ═══════════════════════════════════════════
+    //  游戏逻辑
+    // ═══════════════════════════════════════════
+
+    let CURRENT_MODE = 'expert'; 
+    let ROWS = 16; let COLS = 30; let MINES = 99;
+    let CURRENT_ZOOM = parseFloat(localStorage.getItem('minesweeper_zoom')) || 1.5; // 默认拉到1.5倍符合大屏体验
+    
+    let board = [];
+    let minesLeft = MINES;
+    let timeElapsed = 0;
+    let timerInterval = null;
+    let gameOver = false;
+    let firstClick = true;
+    let revealedCount = 0;
+
+    let isLeftPressed = false; let isRightPressed = false;
+    let currentHoveredCell = null;
+
+    let records = JSON.parse(localStorage.getItem('minesweeper_records')) || {
+        beginner: { time: 999, name: '匿名' },
+        intermediate: { time: 999, name: '匿名' },
+        expert: { time: 999, name: '匿名' }
+    };
+
+    const boardElement = document.getElementById('board');
+    const resetBtn = document.getElementById('reset-btn');
+    const mineCountDisplay = document.getElementById('mine-count');
+    const timerDisplay = document.getElementById('timer');
+    const zoomContainer = document.getElementById('zoom-container');
+    
+    const gameMenuBtn = document.getElementById('menu-game-btn');
+    const gameDropdown = document.getElementById('game-dropdown');
+    const helpMenuBtn = document.getElementById('menu-help-btn');
+    const leaderboardModal = document.getElementById('leaderboard-modal');
+    const helpModal = document.getElementById('help-modal');
+
+    gameMenuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        hideAllModals();
+        gameDropdown.style.display = gameDropdown.style.display === 'block' ? 'none' : 'block';
+        updateMenuCheckmarks();
+    });
+
+    helpMenuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        hideAllModals();
+        helpModal.style.display = 'block';
+    });
+
+    document.querySelectorAll('.dropdown-item[data-diff]').forEach(item => {
+        item.addEventListener('click', function() {
+            const diff = this.dataset.diff;
+            if (diff === 'restart') initGame();
+            else changeDifficulty(diff);
+        });
+    });
+
+    // 缩放选项点击逻辑
+    document.querySelectorAll('.zoom-opt').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const zoomVal = parseFloat(this.dataset.zoom);
+            applyZoom(zoomVal);
+            gameDropdown.style.display = 'none';
+        });
+    });
+
+    function applyZoom(val) {
+        CURRENT_ZOOM = val;
+        localStorage.setItem('minesweeper_zoom', val);
+        zoomContainer.style.transform = `scale(${val})`;
+        updateMenuCheckmarks();
+    }
+
+    document.getElementById('menu-leaderboard-btn').addEventListener('click', () => {
+        hideAllModals();
+        document.getElementById('score-beginner-time').textContent = records.beginner.time + " 秒";
+        document.getElementById('score-beginner-name').textContent = records.beginner.name;
+        document.getElementById('score-intermediate-time').textContent = records.intermediate.time + " 秒";
+        document.getElementById('score-intermediate-name').textContent = records.intermediate.name;
+        document.getElementById('score-expert-time').textContent = records.expert.time + " 秒";
+        document.getElementById('score-expert-name').textContent = records.expert.name;
+        leaderboardModal.style.display = 'block';
+    });
+
+    document.getElementById('close-leaderboard').addEventListener('click', () => leaderboardModal.style.display = 'none');
+    document.getElementById('close-help').addEventListener('click', () => helpModal.style.display = 'none');
+    window.addEventListener('click', () => { gameDropdown.style.display = 'none'; });
+
+    function hideAllModals() {
+        gameDropdown.style.display = 'none';
+        leaderboardModal.style.display = 'none';
+        helpModal.style.display = 'none';
+    }
+
+    function updateMenuCheckmarks() {
+        document.getElementById('opt-beginner').classList.remove('checked');
+        document.getElementById('opt-intermediate').classList.remove('checked');
+        document.getElementById('opt-expert').classList.remove('checked');
+        const currentOpt = document.getElementById('opt-' + CURRENT_MODE);
+        if (currentOpt) currentOpt.classList.add('checked');
+
+        document.querySelectorAll('.zoom-opt').forEach(opt => {
+            if (parseFloat(opt.dataset.zoom) === CURRENT_ZOOM) opt.classList.add('checked');
+            else opt.classList.remove('checked');
+        });
+    }
+
+    function changeDifficulty(mode) {
+        CURRENT_MODE = mode;
+        if (mode === 'beginner') { ROWS = 9; COLS = 9; MINES = 10; }
+        else if (mode === 'intermediate') { ROWS = 16; COLS = 16; MINES = 40; }
+        else if (mode === 'expert') { ROWS = 16; COLS = 30; MINES = 99; }
+        initGame();
+    }
+
+    window.addEventListener('keydown', (e) => { if (e.key === 'F2') initGame(); });
+
+    function initGame() {
+        boardElement.style.gridTemplateColumns = `repeat(${COLS}, 16px)`;
+        boardElement.innerHTML = '';
+        board = [];
+        minesLeft = MINES;
+        timeElapsed = 0;
+        gameOver = false;
+        firstClick = true;
+        revealedCount = 0;
+        isLeftPressed = false; isRightPressed = false;
+        currentHoveredCell = null;
+        
+        clearInterval(timerInterval);
+        timerInterval = null;
+        updateDisplay();
+        drawFace('normal');
+
+        for (let r = 0; r < ROWS; r++) {
+            let row = [];
+            for (let c = 0; c < COLS; c++) {
+                const cellElement = document.createElement('div');
+                cellElement.classList.add('cell');
+                cellElement.dataset.r = r; cellElement.dataset.c = c;
+                
+                cellElement.addEventListener('mousedown', handleMouseDown);
+                cellElement.addEventListener('mouseenter', handleMouseEnter);
+                cellElement.addEventListener('mouseleave', handleMouseLeave);
+                
+                boardElement.appendChild(cellElement);
+                row.push({ r, c, element: cellElement, isMine: false, isRevealed: false, isFlagged: false, neighbors: 0 });
+            }
+            board.push(row);
+        }
+        placeMinesBlindly();
+        applyZoom(CURRENT_ZOOM); // 确保开局应用当前缩放
+    }
+
+    function placeMinesBlindly() {
+        let placed = 0;
+        while (placed < MINES) {
+            let r = Math.floor(Math.random() * ROWS);
+            let c = Math.floor(Math.random() * COLS);
+            if (!board[r][c].isMine) { board[r][c].isMine = true; placed++; }
+        }
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (!board[r][c].isMine) {
+                    let count = 0;
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dc = -1; dc <= 1; dc++) {
+                            let nr = r + dr, nc = c + dc;
+                            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc].isMine) count++;
+                        }
+                    }
+                    board[r][c].neighbors = count;
+                }
+            }
+        }
+    }
+
+    function handleMouseDown(e) {
+        if (gameOver) return;
+        let r = parseInt(this.dataset.r); let c = parseInt(this.dataset.c);
+        let cell = board[r][c];
+        if (e.button === 0) isLeftPressed = true;
+        if (e.button === 2) isRightPressed = true;
+        currentHoveredCell = cell;
+
+        if ((isLeftPressed && isRightPressed) || e.button === 1) {
+            drawFace('pressed');
+            updateChordingPresseffect(cell, true);
+        } else if (isLeftPressed && !cell.isRevealed && !cell.isFlagged) {
+            drawFace('pressed');
+            cell.element.classList.add('active-press');
+        } else if (e.button === 2 && !isLeftPressed) {
+            toggleFlag(cell);
+        }
+    }
+
+    function handleMouseEnter() {
+        if (gameOver) return;
+        let cell = board[parseInt(this.dataset.r)][parseInt(this.dataset.c)];
+        currentHoveredCell = cell;
+        if (isLeftPressed && isRightPressed) updateChordingPresseffect(cell, true);
+        else if (isLeftPressed && !cell.isRevealed && !cell.isFlagged) cell.element.classList.add('active-press');
+    }
+
+    function handleMouseLeave() {
+        if (gameOver) return;
+        let cell = board[parseInt(this.dataset.r)][parseInt(this.dataset.c)];
+        if (isLeftPressed && isRightPressed) updateChordingPresseffect(cell, false);
+        else if (isLeftPressed) cell.element.classList.remove('active-press');
+    }
+
+    window.addEventListener('mouseup', function(e) {
+        if (gameOver || !currentHoveredCell) {
+            if (e.button === 0) isLeftPressed = false;
+            if (e.button === 2) isRightPressed = false;
+            return;
+        }
+        let cell = currentHoveredCell;
+        drawFace('normal');
+
+        if ((isLeftPressed && isRightPressed) || e.button === 1) {
+            updateChordingPresseffect(cell, false);
+            if (cell.isRevealed && cell.neighbors > 0) executeChording(cell);
+            isLeftPressed = false; isRightPressed = false;
+        } else if (e.button === 0 && isLeftPressed) {
+            isLeftPressed = false;
+            cell.element.classList.remove('active-press');
+            if (!cell.isFlagged) revealCell(cell);
+        }
+        if (e.button === 2) isRightPressed = false;
+    });
+
+    function updateChordingPresseffect(cell, isPressed) {
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                let nr = cell.r + dr, nc = cell.c + dc;
+                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+                    let nCell = board[nr][nc];
+                    if (!nCell.isRevealed && !nCell.isFlagged) {
+                        if (isPressed) nCell.element.classList.add('active-press');
+                        else nCell.element.classList.remove('active-press');
+                    }
+                }
+            }
+        }
+    }
+
+    function executeChording(cell) {
+        let flagCount = 0; let unrevealedNeighbors = [];
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                let nr = cell.r + dr, nc = cell.c + dc;
+                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+                    let nCell = board[nr][nc];
+                    if (nCell.isFlagged) flagCount++;
+                    else if (!nCell.isRevealed) unrevealedNeighbors.push(nCell);
+                }
+            }
+        }
+        if (flagCount === cell.neighbors) { unrevealedNeighbors.forEach(nCell => revealCell(nCell)); }
+    }
+
+    function revealCell(cell) {
+        if (cell.isRevealed || cell.isFlagged || gameOver) return;
+
+        if (firstClick) {
+            firstClick = false;
+            timerInterval = setInterval(() => { if(timeElapsed < 999) timeElapsed++; updateDisplay(); }, 1000);
+        }
+
+        cell.isRevealed = true;
+        cell.element.classList.add('revealed');
+        revealedCount++;
+
+        if (cell.isMine) { triggerGameOver(cell); return; }
+
+        if (cell.neighbors > 0) {
+            cell.element.textContent = cell.neighbors;
+            cell.element.classList.add(`c${cell.neighbors}`);
+        } else {
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    let nr = cell.r + dr, nc = cell.c + dc;
+                    if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) revealCell(board[nr][nc]);
+                }
+            }
+        }
+
+        if (revealedCount === ROWS * COLS - MINES) triggerWin();
+    }
+
+    function toggleFlag(cell) {
+        if (cell.isRevealed) return;
+        cell.isFlagged = !cell.isFlagged;
+        if (cell.isFlagged) {
+            setCellCanvas(cell, 'flag');
+            minesLeft--;
+        } else {
+            cell.element.textContent = '';
+            minesLeft++;
+        }
+        updateDisplay();
+    }
+
+    function triggerGameOver(clickedCell) {
+        gameOver = true; clearInterval(timerInterval);
+        drawFace('dead');
+        clickedCell.element.classList.add('mine-hit');
+
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                let cell = board[r][c];
+                if (cell.isMine && !cell.isFlagged) {
+                    setCellCanvas(cell, 'mine');
+                    cell.element.classList.add('revealed');
+                } else if (!cell.isMine && cell.isFlagged) {
+                    setCellCanvas(cell, 'wrong');
+                }
+            }
+        }
+    }
+
+    function triggerWin() {
+        gameOver = true; clearInterval(timerInterval);
+        drawFace('win');
+        minesLeft = 0;
+        updateDisplay();
+
+        if (timeElapsed <= records[CURRENT_MODE].time) {
+            setTimeout(() => {
+                let newName = prompt(`太强了！你刷新了${CURRENT_MODE === 'beginner'?'初级':CURRENT_MODE === 'intermediate'?'中级':'高级'}最高纪录！\n请输入你的名字:`, '匿名');
+                if (newName) {
+                    records[CURRENT_MODE].time = timeElapsed;
+                    records[CURRENT_MODE].name = newName;
+                    localStorage.setItem('minesweeper_records', JSON.stringify(records));
+                }
+            }, 300);
+        }
+    }
+
+    function updateDisplay() {
+        const displayMines = minesLeft >= 0 ? minesLeft : minesLeft;
+        drawLCD('mine-count', minesLeft);
+        drawLCD('timer', timeElapsed);
+    }
+
+    // ── 长按触发双键排雷（触摸板/触屏单指长按） ──
+    let longPressTimer = null;
+    const LONG_PRESS_MS = 400;
+
+    boardElement.addEventListener('touchstart', function(e) {
+        if (e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (!el || !el.dataset.r) return;
+        const cell = board[parseInt(el.dataset.r)][parseInt(el.dataset.c)];
+
+        longPressTimer = setTimeout(() => {
+            longPressTimer = null;
+            if (gameOver) return;
+            if (cell.isRevealed && cell.neighbors > 0) {
+                updateChordingPresseffect(cell, true);
+                setTimeout(() => {
+                    updateChordingPresseffect(cell, false);
+                    executeChording(cell);
+                }, 80);
+            } else if (!cell.isRevealed && !gameOver) {
+                toggleFlag(cell);
+            }
+        }, LONG_PRESS_MS);
+    }, { passive: true });
+
+    boardElement.addEventListener('touchend', function() {
+        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    }, { passive: true });
+
+    boardElement.addEventListener('touchmove', function() {
+        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    }, { passive: true });
+
+    // ── Ctrl+点击 触发双键排雷 ──
+    boardElement.addEventListener('click', function(e) {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        const el = e.target.closest('[data-r]');
+        if (!el) return;
+        const cell = board[parseInt(el.dataset.r)][parseInt(el.dataset.c)];
+        if (gameOver || !cell.isRevealed || cell.neighbors <= 0) return;
+        updateChordingPresseffect(cell, true);
+        setTimeout(() => {
+            updateChordingPresseffect(cell, false);
+            executeChording(cell);
+        }, 80);
+    });
+    document.addEventListener('contextmenu', event => event.preventDefault());
+    resetBtn.addEventListener('click', initGame);
+
+    // ── 自定义背景 ──
+    const bgUpload = document.getElementById('bg-upload');
+
+    document.getElementById('menu-bg-btn').addEventListener('click', () => {
+        hideAllModals();
+        bgUpload.click();
+    });
+
+    bgUpload.addEventListener('change', function() {
+        const file = this.files[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        document.body.style.backgroundImage = `url('${url}')`;
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundPosition = 'center';
+        document.body.style.backgroundColor = '';
+        localStorage.setItem('minesweeper_bg', url);
+    });
+
+    document.getElementById('menu-bg-reset-btn').addEventListener('click', () => {
+        hideAllModals();
+        document.body.style.backgroundImage = '';
+        document.body.style.backgroundSize = '';
+        document.body.style.backgroundPosition = '';
+        document.body.style.backgroundColor = '#008080';
+        localStorage.removeItem('minesweeper_bg');
+    });
+
+    initGame();
+</script>
+
+</body>
+</html>
