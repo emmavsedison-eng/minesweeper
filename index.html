@@ -2,28 +2,34 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>Minesweeper v4 - Long Press Flag Only</title>
     <style>
-        body {
+        html, body {
             margin: 0;
-            padding: 10px;
+            padding: 0;
             background-color: #008080;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
             min-height: 100vh;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
             -webkit-touch-callout: none;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
+        body {
+            display: flex;
+            justify-content: flex-start;
+            align-items: flex-start;
+            padding: 10px;
+        }
+
+        /* 用zoom替代transform:scale，不会影响文档流 */
         .zoom-wrapper {
-            transform-origin: top center;
-            transition: transform 0.1s ease-out;
             display: inline-block;
+            transform-origin: top left;
         }
 
         .window {
@@ -506,7 +512,30 @@
 
     let CURRENT_MODE = 'expert'; 
     let ROWS = 16; let COLS = 30; let MINES = 99;
-    let CURRENT_ZOOM = parseFloat(localStorage.getItem('minesweeper_zoom')) || 1.5;
+
+    // 计算默认缩放：让棋盘适应屏幕宽度
+    function calcDefaultZoom() {
+        const screenW = window.innerWidth;
+        const padding = 16; // body padding两侧
+        // 高级棋盘宽度：30列*16px + 边框等约30px = 约510px
+        // 中级：16*16+30=286, 初级：9*16+30=174
+        let boardW;
+        if (CURRENT_MODE === 'expert') boardW = 510;
+        else if (CURRENT_MODE === 'intermediate') boardW = 286;
+        else boardW = 174;
+        
+        const available = screenW - padding;
+        if (available >= boardW * 1.5) return 1.5;
+        if (available >= boardW) return 1.0;
+        // 手机上缩小到能放下
+        const fit = available / boardW;
+        // 取最近的标准缩放档
+        if (fit >= 0.875) return 0.875; // 87.5%
+        if (fit >= 0.75) return 0.75;
+        return Math.max(0.5, Math.round(fit * 100) / 100);
+    }
+
+    let CURRENT_ZOOM = parseFloat(localStorage.getItem('minesweeper_zoom')) || 0; // 0=auto
     
     let board = [];
     let minesLeft = MINES;
@@ -570,8 +599,17 @@
     function applyZoom(val) {
         CURRENT_ZOOM = val;
         localStorage.setItem('minesweeper_zoom', val);
-        zoomContainer.style.transform = `scale(${val})`;
+        // 用 zoom CSS 属性代替 transform:scale，这样文档流会随之调整，不会溢出
+        zoomContainer.style.zoom = val;
+        zoomContainer.style.transform = '';
         updateMenuCheckmarks();
+    }
+
+    function applyAutoZoom() {
+        const z = calcDefaultZoom();
+        zoomContainer.style.zoom = z;
+        zoomContainer.style.transform = '';
+        // 不覆盖 CURRENT_ZOOM，让菜单checkmark仍然显示用户选择
     }
 
     document.getElementById('menu-leaderboard-btn').addEventListener('click', () => {
@@ -612,6 +650,10 @@
         if (mode === 'beginner') { ROWS = 9; COLS = 9; MINES = 10; }
         else if (mode === 'intermediate') { ROWS = 16; COLS = 16; MINES = 40; }
         else if (mode === 'expert') { ROWS = 16; COLS = 30; MINES = 99; }
+        // 切换难度时，如果没有手动设置缩放，重新自动计算
+        if (!localStorage.getItem('minesweeper_zoom')) {
+            CURRENT_ZOOM = 0;
+        }
         initGame();
     }
 
@@ -631,7 +673,6 @@
         
         clearInterval(timerInterval);
         timerInterval = null;
-        // 清除可能残留的触摸状态
         if (longPressTimer) {
             clearTimeout(longPressTimer);
             longPressTimer = null;
@@ -660,7 +701,14 @@
             board.push(row);
         }
         placeMinesBlindly();
-        applyZoom(CURRENT_ZOOM);
+
+        // 应用缩放
+        if (CURRENT_ZOOM && CURRENT_ZOOM > 0) {
+            applyZoom(CURRENT_ZOOM);
+        } else {
+            applyAutoZoom();
+        }
+        updateMenuCheckmarks();
     }
 
     function placeMinesBlindly() {
@@ -882,20 +930,20 @@
 
     boardElement.addEventListener('touchstart', function(e) {
         if (e.touches.length !== 1 || gameOver) return;
-        e.preventDefault(); // 阻止默认行为，提升触摸响应
+        e.preventDefault();
         touchMoved = false;
         longPressTriggered = false;
         const touch = e.touches[0];
         touchStartX = touch.clientX;
         touchStartY = touch.clientY;
         const el = document.elementFromPoint(touch.clientX, touch.clientY);
-        if (!el || !el.dataset.r) return;
-        lastTouchCell = board[parseInt(el.dataset.r)][parseInt(el.dataset.c)];
+        const cellEl = el && el.closest('[data-r]');
+        if (!cellEl) return;
+        lastTouchCell = board[parseInt(cellEl.dataset.r)][parseInt(cellEl.dataset.c)];
 
         longPressTimer = setTimeout(() => {
             if (gameOver || touchMoved || !lastTouchCell) return;
             const cell = lastTouchCell;
-            // 长按：只插旗（如果没旗）
             if (!cell.isRevealed && !cell.isFlagged) {
                 placeFlagOnly(cell);
                 if (navigator.vibrate) navigator.vibrate(30);
@@ -905,17 +953,20 @@
     }, { passive: false });
 
     boardElement.addEventListener('touchmove', function(e) {
+        if (e.touches.length > 1) {
+            return;
+        }
         const touch = e.touches[0];
         const dx = Math.abs(touch.clientX - touchStartX);
         const dy = Math.abs(touch.clientY - touchStartY);
-        if (dx > 18 || dy > 18) { // 提高移动阈值，减少误判
+        if (dx > 18 || dy > 18) {
             touchMoved = true;
             if (longPressTimer) { 
                 clearTimeout(longPressTimer); 
                 longPressTimer = null; 
             }
         }
-        e.preventDefault(); // 阻止页面滚动
+        e.preventDefault();
     }, { passive: false });
 
     boardElement.addEventListener('touchend', function(e) {
@@ -923,22 +974,32 @@
             clearTimeout(longPressTimer);
             longPressTimer = null;
         }
-        if (touchMoved || longPressTriggered || gameOver || !lastTouchCell) {
+        if (touchMoved || longPressTriggered || gameOver) {
             lastTouchCell = null;
             longPressTriggered = false;
             return;
         }
 
-        const cell = lastTouchCell;
-        // 短按逻辑
+        // Re-resolve cell from touch position to handle zoom coordinate issues
+        let cell = lastTouchCell;
+        if (e.changedTouches && e.changedTouches.length > 0) {
+            const t = e.changedTouches[0];
+            const el = document.elementFromPoint(t.clientX, t.clientY);
+            const cellEl = el && el.closest('[data-r]');
+            if (cellEl) {
+                cell = board[parseInt(cellEl.dataset.r)][parseInt(cellEl.dataset.c)];
+            }
+        }
+        if (!cell) {
+            lastTouchCell = null;
+            longPressTriggered = false;
+            return;
+        }
         if (!cell.isRevealed && cell.isFlagged) {
-            // 有旗 → 取消旗子
             removeFlagOnly(cell);
         } else if (!cell.isRevealed && !cell.isFlagged) {
-            // 无旗 → 翻开
             revealCell(cell);
         } else if (cell.isRevealed && cell.neighbors > 0) {
-            // 数字格 → 排雷
             updateChordingPresseffect(cell, true);
             setTimeout(() => { 
                 updateChordingPresseffect(cell, false); 
@@ -951,7 +1012,6 @@
         e.preventDefault();
     }, { passive: false });
 
-    // 处理触摸取消（如来电等中断）
     boardElement.addEventListener('touchcancel', function() {
         if (longPressTimer) {
             clearTimeout(longPressTimer);
@@ -962,10 +1022,8 @@
         touchMoved = false;
     });
 
-    // 阻止右键菜单
     document.addEventListener('contextmenu', event => event.preventDefault());
 
-    // Ctrl+点击 双键排雷（电脑/触摸板）
     boardElement.addEventListener('click', function(e) {
         if (!e.ctrlKey) return;
         e.preventDefault();
@@ -982,7 +1040,6 @@
 
     resetBtn.addEventListener('click', initGame);
 
-    // 自定义背景
     const bgUpload = document.getElementById('bg-upload');
 
     document.getElementById('menu-bg-btn').addEventListener('click', () => {
@@ -1010,7 +1067,13 @@
         localStorage.removeItem('minesweeper_bg');
     });
 
-    // 初始化
+    // 响应窗口大小变化，重新自动调整缩放
+    window.addEventListener('resize', () => {
+        if (!localStorage.getItem('minesweeper_zoom')) {
+            applyAutoZoom();
+        }
+    });
+
     initGame();
 </script>
 
