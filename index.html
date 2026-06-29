@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-    <title>Minesweeper v4 - Long Press Flag Only</title>
+    <title>Minesweeper v4 - Fixed</title>
     <style>
         html, body {
             margin: 0;
@@ -20,16 +20,23 @@
         }
 
         body {
-            display: flex;
-            justify-content: flex-start;
-            align-items: flex-start;
-            padding: 10px;
+            display: block;
+            padding: 0;
         }
 
-        /* 用zoom替代transform:scale，不会影响文档流 */
+        /* 可拖动窗口：fixed定位，脱离文档流 */
         .zoom-wrapper {
             display: inline-block;
             transform-origin: top left;
+            position: fixed;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: default;
+        }
+        /* 拖动开始后取消居中transform，改用纯left/top */
+        .zoom-wrapper.dragged {
+            transform: none;
         }
 
         .window {
@@ -42,7 +49,7 @@
             padding: 3px;
             user-select: none;
             position: relative;
-            overflow: hidden;
+            overflow: visible; 
         }
 
         .title-bar {
@@ -58,7 +65,9 @@
             box-sizing: border-box;
             white-space: nowrap;
             overflow: hidden;
+            cursor: grab;
         }
+        .title-bar:active { cursor: grabbing; }
         .title-text { display: flex; align-items: center; gap: 4px; }
         .title-icon {
             width: 14px; height: 14px;
@@ -98,23 +107,12 @@
             border-top: 1px solid #fff; border-left: 1px solid #fff;
             border-right: 2px solid #000; border-bottom: 2px solid #000;
             box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
-            z-index: 100;
-            min-width: 140px;
+            z-index: 1000;
+            min-width: 150px;
+            max-height: 80vh;
+            overflow-y: auto;
             padding: 2px;
         }
-        
-        .submenu-container { position: relative; }
-        .submenu {
-            display: none;
-            position: absolute;
-            top: -3px; left: 100%;
-            background-color: #c0c0c0;
-            border-top: 1px solid #fff; border-left: 1px solid #fff;
-            border-right: 2px solid #000; border-bottom: 2px solid #000;
-            padding: 2px;
-            min-width: 100px;
-        }
-        .submenu-container:hover .submenu { display: block; }
 
         .dropdown-item {
             padding: 3px 20px 3px 22px;
@@ -126,6 +124,16 @@
             justify-content: space-between;
         }
         .dropdown-item:hover { background-color: #000080; color: white; }
+        
+        /* 菜单分级小标题样式 */
+        .dropdown-header {
+            padding: 4px 8px 2px 8px;
+            font-size: 11px;
+            color: #555555;
+            font-weight: bold;
+            pointer-events: none;
+        }
+        
         .dropdown-divider { height: 1px; background-color: #808080; border-bottom: 1px solid #fff; margin: 4px 1px; }
         
         .dropdown-item.checked::before {
@@ -148,6 +156,7 @@
             padding: 4px 7px;
             margin-bottom: 6px;
             box-sizing: border-box;
+            min-width: 124px;
             border-top: 3px solid #808080; border-left: 3px solid #808080;
             border-right: 3px solid #ffffff; border-bottom: 3px solid #ffffff;
         }
@@ -247,9 +256,9 @@
             display: none;
             text-align: center;
             font-size: 12px;
-            color: #333;
-            padding: 4px 0 0;
-            background-color: #c0c0c0;
+            color: #ffffff;
+            padding: 10px 0 0;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
         }
         @media (max-width: 600px) {
             .mobile-hint { display: block; }
@@ -262,7 +271,7 @@
 <div class="zoom-wrapper" id="zoom-container">
     <div class="window">
         <div class="title-bar">
-            <div class="title-text"><div class="title-icon"></div>Minesweeper v4 - Flag Only</div>
+            <div class="title-text"><div class="title-icon"></div>Minesweeper</div>
             <div class="window-buttons">
                 <div class="win-btn">_</div>
                 <div class="win-btn">❑</div>
@@ -282,16 +291,12 @@
                 <div class="dropdown-item" id="opt-expert" data-diff="expert">高级(<u>E</u>)</div>
                 <div class="dropdown-divider"></div>
                 
-                <div class="submenu-container">
-                    <div class="dropdown-item">缩放(<u>Z</u>) <span style="font-size:10px;">►</span></div>
-                    <div class="submenu">
-                        <div class="dropdown-item zoom-opt" data-zoom="1">100%</div>
-                        <div class="dropdown-item zoom-opt" data-zoom="1.25">125%</div>
-                        <div class="dropdown-item zoom-opt" data-zoom="1.5">150%</div>
-                        <div class="dropdown-item zoom-opt" data-zoom="1.75">175%</div>
-                        <div class="dropdown-item zoom-opt" data-zoom="2">200%</div>
-                    </div>
-                </div>
+                <div class="dropdown-header">界面缩放 (<u>Z</u>)</div>
+                <div class="dropdown-item zoom-opt" data-zoom="1">100%</div>
+                <div class="dropdown-item zoom-opt" data-zoom="1.25">125%</div>
+                <div class="dropdown-item zoom-opt" data-zoom="1.5">150%</div>
+                <div class="dropdown-item zoom-opt" data-zoom="1.75">175%</div>
+                <div class="dropdown-item zoom-opt" data-zoom="2">200%</div>
                 
                 <div class="dropdown-divider"></div>
                 <div class="dropdown-item" id="menu-leaderboard-btn">英雄榜(<u>T</u>)...</div>
@@ -311,7 +316,6 @@
                 <div class="digital-display"><canvas id="timer" width="39" height="23"></canvas></div>
             </div>
             <div id="board"></div>
-            <div class="mobile-hint">📱 长按插旗 · 点旗取消 · 短按无旗格翻开</div>
         </div>
 
         <div class="modal" id="leaderboard-modal">
@@ -339,6 +343,8 @@
             <div class="modal-btn" id="close-help">确定</div>
         </div>
     </div>
+    
+    <div class="mobile-hint">📱 长按插旗 · 点旗取消 · 短按无旗格翻开</div>
 </div>
 
 <script>
@@ -525,29 +531,24 @@
     let CURRENT_MODE = 'beginner'; 
     let ROWS = 9; let COLS = 9; let MINES = 10;
 
-    // 计算默认缩放：让棋盘适应屏幕宽度
     function calcDefaultZoom() {
         const screenW = window.innerWidth;
-        const padding = 16; // body padding两侧
-        // 高级棋盘宽度：30列*16px + 边框等约30px = 约510px
-        // 中级：16*16+30=286, 初级：9*16+30=174
+        const padding = 16;
         let boardW;
         if (CURRENT_MODE === 'expert') boardW = 510;
         else if (CURRENT_MODE === 'intermediate') boardW = 286;
         else boardW = 174;
         
         const available = screenW - padding;
-        if (available >= boardW * 1.5) return 1.5;
+        if (available >= boardW * 1.5 && CURRENT_MODE === 'expert') return 1.5;
         if (available >= boardW) return 1.0;
-        // 手机上缩小到能放下
         const fit = available / boardW;
-        // 取最近的标准缩放档
-        if (fit >= 0.875) return 0.875; // 87.5%
+        if (fit >= 0.875) return 0.875;
         if (fit >= 0.75) return 0.75;
         return Math.max(0.5, Math.round(fit * 100) / 100);
     }
 
-    let CURRENT_ZOOM = parseFloat(localStorage.getItem('minesweeper_zoom')) || 0; // 0=auto
+    let CURRENT_ZOOM = parseFloat(localStorage.getItem('minesweeper_zoom')) || 0;
     
     let board = [];
     let minesLeft = MINES;
@@ -611,7 +612,6 @@
     function applyZoom(val) {
         CURRENT_ZOOM = val;
         localStorage.setItem('minesweeper_zoom', val);
-        // 用 zoom CSS 属性代替 transform:scale，这样文档流会随之调整，不会溢出
         zoomContainer.style.zoom = val;
         zoomContainer.style.transform = '';
         updateMenuCheckmarks();
@@ -621,7 +621,6 @@
         const z = calcDefaultZoom();
         zoomContainer.style.zoom = z;
         zoomContainer.style.transform = '';
-        // 不覆盖 CURRENT_ZOOM，让菜单checkmark仍然显示用户选择
     }
 
     document.getElementById('menu-leaderboard-btn').addEventListener('click', () => {
@@ -662,10 +661,8 @@
         if (mode === 'beginner') { ROWS = 9; COLS = 9; MINES = 10; }
         else if (mode === 'intermediate') { ROWS = 16; COLS = 16; MINES = 40; }
         else if (mode === 'expert') { ROWS = 16; COLS = 30; MINES = 99; }
-        // 切换难度时，如果没有手动设置缩放，重新自动计算
-        if (!localStorage.getItem('minesweeper_zoom')) {
-            CURRENT_ZOOM = 0;
-        }
+        CURRENT_ZOOM = 0;
+        localStorage.removeItem('minesweeper_zoom');
         initGame();
     }
 
@@ -674,8 +671,8 @@
     function initGame() {
         boardElement.style.gridTemplateColumns = `repeat(${COLS}, 16px)`;
         boardElement.style.width = `${COLS * 16}px`;
-        // header宽度跟随棋盘，title-bar/menu-bar由CSS width:100%自动适应
-        document.querySelector('.header').style.width = `${COLS * 16}px`;
+        const boardPx = COLS * 16;
+        document.querySelector('.header').style.width = `${boardPx + 6}px`;
         document.querySelector('.window').style.width = '';
         boardElement.innerHTML = '';
         board = [];
@@ -718,7 +715,6 @@
         }
         placeMinesBlindly();
 
-        // 应用缩放
         if (CURRENT_ZOOM && CURRENT_ZOOM > 0) {
             applyZoom(CURRENT_ZOOM);
         } else {
@@ -750,7 +746,6 @@
         }
     }
 
-    // ────────── 电脑端操作（完全保留原始逻辑）──────────
     function handleMouseDown(e) {
         if (gameOver) return;
         let r = parseInt(this.dataset.r); let c = parseInt(this.dataset.c);
@@ -836,6 +831,7 @@
         if (flagCount === cell.neighbors) { unrevealedNeighbors.forEach(nCell => revealCell(nCell)); }
     }
 
+    // Bug 1 修复：彻底移除了内部引发崩溃的未定义残留作用域变量所在行
     function revealCell(cell) {
         if (cell.isRevealed || cell.isFlagged || gameOver) return;
 
@@ -856,8 +852,10 @@
         } else {
             for (let dr = -1; dr <= 1; dr++) {
                 for (let dc = -1; dc <= 1; dc++) {
-                    let nr = cell.r + dr, nc = cell.c + dc;
-                    if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) revealCell(board[nr][nc]);
+                    let nr_fixed = cell.r + dr, nc_fixed = cell.c + dc;
+                    if (nr_fixed >= 0 && nr_fixed < ROWS && nc_fixed >= 0 && nc_fixed < COLS) {
+                        revealCell(board[nr_fixed][nc_fixed]);
+                    }
                 }
             }
         }
@@ -878,7 +876,6 @@
         updateDisplay();
     }
 
-    // ────────── 手机触摸专用函数 ──────────
     function placeFlagOnly(cell) {
         if (cell.isRevealed || cell.isFlagged) return;
         cell.isFlagged = true;
@@ -936,7 +933,6 @@
         drawLCD('timer', timeElapsed);
     }
 
-    // ── 手机触摸支持（长按插旗 / 短按取消、翻开、排雷） ──
     let longPressTimer = null;
     const LONG_PRESS_MS = 500;
     let touchMoved = false;
@@ -958,7 +954,6 @@
         return board[parseInt(cellEl.dataset.r)][parseInt(cellEl.dataset.c)];
     }
 
-    // ── 双指缩放 ──
     let pinchStartDist = 0;
     let pinchStartZoom = 1;
     let isPinching = false;
@@ -976,7 +971,6 @@
     boardElement.addEventListener('touchstart', function(e) {
         e.preventDefault();
         if (e.touches.length === 2) {
-            // 进入双指缩放模式
             cancelTouch();
             isPinching = true;
             pinchStartDist = getPinchDist(e.touches);
@@ -987,7 +981,6 @@
             cancelTouch();
             return;
         }
-        // 单指
         isPinching = false;
         if (gameOver) return;
         cancelTouch();
@@ -1013,7 +1006,6 @@
         e.preventDefault();
         if (e.touches.length === 2) {
             if (!isPinching) {
-                // 中途第二根手指加入
                 cancelTouch();
                 isPinching = true;
                 pinchStartDist = getPinchDist(e.touches);
@@ -1027,7 +1019,6 @@
             return;
         }
         if (isPinching) return;
-        // 单指移动
         const touch = e.touches[0];
         const dx = Math.abs(touch.clientX - touchStartX);
         const dy = Math.abs(touch.clientY - touchStartY);
@@ -1041,11 +1032,9 @@
         e.preventDefault();
         if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
 
-        // 双指缩放结束
         if (isPinching) {
             if (e.touches.length < 2) {
                 isPinching = false;
-                // 保存缩放值
                 localStorage.setItem('minesweeper_zoom', CURRENT_ZOOM);
                 updateMenuCheckmarks();
             }
@@ -1124,12 +1113,51 @@
         localStorage.removeItem('minesweeper_bg');
     });
 
-    // 响应窗口大小变化，重新自动调整缩放
     window.addEventListener('resize', () => {
         if (!localStorage.getItem('minesweeper_zoom')) {
             applyAutoZoom();
         }
     });
+
+    (function() {
+        const wrapper = zoomContainer;
+        const titleBar = document.querySelector('.title-bar');
+        let isDragging = false;
+        let dragOffsetX = 0, dragOffsetY = 0;
+
+        titleBar.addEventListener('mousedown', function(e) {
+            if (e.target.closest('.window-buttons')) return;
+            e.preventDefault();
+
+            if (!wrapper.classList.contains('dragged')) {
+                const rect = wrapper.getBoundingClientRect();
+                const z = parseFloat(wrapper.style.zoom) || 1;
+                wrapper.style.left = (rect.left / z) + 'px';
+                wrapper.style.top  = (rect.top  / z) + 'px';
+                wrapper.classList.add('dragged');
+            }
+
+            dragOffsetX = e.clientX - parseFloat(wrapper.style.left || 0);
+            dragOffsetY = e.clientY - parseFloat(wrapper.style.top  || 0);
+            isDragging = true;
+            titleBar.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+            let newLeft = e.clientX - dragOffsetX;
+            let newTop  = e.clientY - dragOffsetY;
+            if (newTop < 0) newTop = 0;
+            wrapper.style.left = newLeft + 'px';
+            wrapper.style.top  = newTop  + 'px';
+        });
+
+        document.addEventListener('mouseup', function() {
+            if (!isDragging) return;
+            isDragging = false;
+            titleBar.style.cursor = 'grab';
+        });
+    })();
 
     initGame();
 </script>
