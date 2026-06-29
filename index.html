@@ -928,18 +928,59 @@
     let touchStartX = 0, touchStartY = 0;
     let longPressTriggered = false;
 
-    boardElement.addEventListener('touchstart', function(e) {
-        if (e.touches.length !== 1 || gameOver) return;
-        e.preventDefault();
-        touchMoved = false;
+    function cancelTouch() {
+        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+        lastTouchCell = null;
         longPressTriggered = false;
+        touchMoved = false;
+    }
+
+    function getCellFromPoint(x, y) {
+        const el = document.elementFromPoint(x, y);
+        const cellEl = el && el.closest('[data-r]');
+        if (!cellEl) return null;
+        return board[parseInt(cellEl.dataset.r)][parseInt(cellEl.dataset.c)];
+    }
+
+    // ── 双指缩放 ──
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
+    let isPinching = false;
+
+    function getPinchDist(touches) {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx*dx + dy*dy);
+    }
+
+    function clampZoom(z) {
+        return Math.min(3.0, Math.max(0.5, z));
+    }
+
+    boardElement.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        if (e.touches.length === 2) {
+            // 进入双指缩放模式
+            cancelTouch();
+            isPinching = true;
+            pinchStartDist = getPinchDist(e.touches);
+            pinchStartZoom = parseFloat(zoomContainer.style.zoom) || 1;
+            return;
+        }
+        if (e.touches.length > 2) {
+            cancelTouch();
+            return;
+        }
+        // 单指
+        isPinching = false;
+        if (gameOver) return;
+        cancelTouch();
+        touchMoved = false;
         const touch = e.touches[0];
         touchStartX = touch.clientX;
         touchStartY = touch.clientY;
-        const el = document.elementFromPoint(touch.clientX, touch.clientY);
-        const cellEl = el && el.closest('[data-r]');
-        if (!cellEl) return;
-        lastTouchCell = board[parseInt(cellEl.dataset.r)][parseInt(cellEl.dataset.c)];
+        lastTouchCell = getCellFromPoint(touch.clientX, touch.clientY);
+        if (!lastTouchCell) return;
 
         longPressTimer = setTimeout(() => {
             if (gameOver || touchMoved || !lastTouchCell) return;
@@ -953,73 +994,73 @@
     }, { passive: false });
 
     boardElement.addEventListener('touchmove', function(e) {
-        if (e.touches.length > 1) {
+        e.preventDefault();
+        if (e.touches.length === 2) {
+            if (!isPinching) {
+                // 中途第二根手指加入
+                cancelTouch();
+                isPinching = true;
+                pinchStartDist = getPinchDist(e.touches);
+                pinchStartZoom = parseFloat(zoomContainer.style.zoom) || 1;
+                return;
+            }
+            const dist = getPinchDist(e.touches);
+            const newZoom = clampZoom(pinchStartZoom * (dist / pinchStartDist));
+            zoomContainer.style.zoom = newZoom;
+            CURRENT_ZOOM = newZoom;
             return;
         }
+        if (isPinching) return;
+        // 单指移动
         const touch = e.touches[0];
         const dx = Math.abs(touch.clientX - touchStartX);
         const dy = Math.abs(touch.clientY - touchStartY);
-        if (dx > 18 || dy > 18) {
+        if (dx > 10 || dy > 10) {
             touchMoved = true;
-            if (longPressTimer) { 
-                clearTimeout(longPressTimer); 
-                longPressTimer = null; 
-            }
+            if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
         }
-        e.preventDefault();
     }, { passive: false });
 
     boardElement.addEventListener('touchend', function(e) {
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-        }
-        if (touchMoved || longPressTriggered || gameOver) {
-            lastTouchCell = null;
-            longPressTriggered = false;
+        e.preventDefault();
+        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+
+        // 双指缩放结束
+        if (isPinching) {
+            if (e.touches.length < 2) {
+                isPinching = false;
+                // 保存缩放值
+                localStorage.setItem('minesweeper_zoom', CURRENT_ZOOM);
+                updateMenuCheckmarks();
+            }
+            cancelTouch();
             return;
         }
 
-        // Re-resolve cell from touch position to handle zoom coordinate issues
-        let cell = lastTouchCell;
-        if (e.changedTouches && e.changedTouches.length > 0) {
-            const t = e.changedTouches[0];
-            const el = document.elementFromPoint(t.clientX, t.clientY);
-            const cellEl = el && el.closest('[data-r]');
-            if (cellEl) {
-                cell = board[parseInt(cellEl.dataset.r)][parseInt(cellEl.dataset.c)];
-            }
-        }
-        if (!cell) {
-            lastTouchCell = null;
-            longPressTriggered = false;
-            return;
-        }
+        if (e.touches.length > 0) { cancelTouch(); return; }
+        if (touchMoved || longPressTriggered || gameOver) { cancelTouch(); return; }
+
+        const t = e.changedTouches[0];
+        const cell = getCellFromPoint(t.clientX, t.clientY);
+        cancelTouch();
+        if (!cell) return;
+
         if (!cell.isRevealed && cell.isFlagged) {
             removeFlagOnly(cell);
         } else if (!cell.isRevealed && !cell.isFlagged) {
             revealCell(cell);
         } else if (cell.isRevealed && cell.neighbors > 0) {
             updateChordingPresseffect(cell, true);
-            setTimeout(() => { 
-                updateChordingPresseffect(cell, false); 
-                executeChording(cell); 
+            setTimeout(() => {
+                updateChordingPresseffect(cell, false);
+                executeChording(cell);
             }, 80);
         }
-
-        lastTouchCell = null;
-        longPressTriggered = false;
-        e.preventDefault();
     }, { passive: false });
 
     boardElement.addEventListener('touchcancel', function() {
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-        }
-        lastTouchCell = null;
-        longPressTriggered = false;
-        touchMoved = false;
+        isPinching = false;
+        cancelTouch();
     });
 
     document.addEventListener('contextmenu', event => event.preventDefault());
