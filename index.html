@@ -862,41 +862,65 @@
         drawLCD('timer', timeElapsed);
     }
 
-    // ── 长按触发双键排雷（触摸板/触屏单指长按） ──
+    // ── 手机触摸支持 ──
     let longPressTimer = null;
-    const LONG_PRESS_MS = 400;
+    const LONG_PRESS_MS = 500;
+    let touchMoved = false;
+    let lastTouchCell = null;
 
     boardElement.addEventListener('touchstart', function(e) {
         if (e.touches.length !== 1) return;
+        touchMoved = false;
         const touch = e.touches[0];
         const el = document.elementFromPoint(touch.clientX, touch.clientY);
         if (!el || !el.dataset.r) return;
-        const cell = board[parseInt(el.dataset.r)][parseInt(el.dataset.c)];
+        lastTouchCell = board[parseInt(el.dataset.r)][parseInt(el.dataset.c)];
 
         longPressTimer = setTimeout(() => {
             longPressTimer = null;
-            if (gameOver) return;
+            if (gameOver || touchMoved) return;
+            const cell = lastTouchCell;
             if (cell.isRevealed && cell.neighbors > 0) {
+                // 长按数字格 = 双键排雷
                 updateChordingPresseffect(cell, true);
                 setTimeout(() => {
                     updateChordingPresseffect(cell, false);
                     executeChording(cell);
                 }, 80);
-            } else if (!cell.isRevealed && !gameOver) {
+            } else if (!cell.isRevealed) {
+                // 长按未翻开格 = 插旗
                 toggleFlag(cell);
+                // 震动反馈（支持的设备）
+                if (navigator.vibrate) navigator.vibrate(30);
             }
         }, LONG_PRESS_MS);
     }, { passive: true });
 
-    boardElement.addEventListener('touchend', function() {
-        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-    }, { passive: true });
-
     boardElement.addEventListener('touchmove', function() {
+        touchMoved = true;
         if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
     }, { passive: true });
 
-    // ── Ctrl+点击 触发双键排雷 ──
+    boardElement.addEventListener('touchend', function(e) {
+        if (longPressTimer) {
+            // 短按 = 翻格
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+            if (!touchMoved && lastTouchCell) {
+                const cell = lastTouchCell;
+                if (!gameOver && !cell.isRevealed && !cell.isFlagged) {
+                    revealCell(cell);
+                } else if (!gameOver && cell.isRevealed && cell.neighbors > 0) {
+                    // 短按已翻开数字 = 不做任何事（避免误触）
+                }
+            }
+        }
+        lastTouchCell = null;
+        // 阻止touch转换成mouse click，避免重复触发
+        e.preventDefault();
+    }, { passive: false });
+
+    // ── Ctrl+点击 触发双键排雷（电脑触摸板） ──
     boardElement.addEventListener('click', function(e) {
         if (!e.ctrlKey) return;
         e.preventDefault();
